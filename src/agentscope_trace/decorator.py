@@ -14,7 +14,8 @@ import logging
 import os
 import threading
 from contextlib import contextmanager
-from typing import Any, Callable, TypeVar, overload
+from typing import Any, Callable, TypeVar, cast, overload
+from typing_extensions import ParamSpec
 
 from .client import AgentScopeClient, get_client
 from .models import LLMCall, Span, SpanKind, SpanStatus
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 # ── Type helpers ──────────────────────────────────────────────────────────────
 
+P = ParamSpec("P")
 F = TypeVar("F", bound=Callable[..., Any])
 
 
@@ -95,37 +97,17 @@ class _TraceContext:
             logger.debug("[AgentScope] Failed to send span: %s", e)
 
         # Re-raise exception (don't suppress it)
-        return None
+        return
 
 
 # ── Public decorators ─────────────────────────────────────────────────────────
 
-@overload
-def trace(name: str, kind: SpanKind, metadata: dict | None, client: AgentScopeClient | None) -> Callable[[F], F]: ...
-
-
-@overload
-def trace(name: str, kind: SpanKind, metadata: dict | None) -> Callable[[F], F]: ...
-
-
-@overload
-def trace(name: str, kind: SpanKind) -> Callable[[F], F]: ...
-
-
-@overload
-def trace(name: str) -> Callable[[F], F]: ...
-
-
-@overload
-def trace(fn: F) -> F: ...
-
-
 def trace(
-    name: str | Callable | None = None,
+    name: str | Callable[..., Any] | None = None,
     kind: SpanKind = SpanKind.AGENT,
     metadata: dict | None = None,
     client: AgentScopeClient | None = None,
-) -> Callable[[F], F] | F:
+) -> Callable[[F], F]:
     """
     Decorator to trace a function's execution as a span.
 
@@ -197,10 +179,10 @@ def _make_trace_decorator(
                 return fn(*args, **kwargs)
 
         # Mark as traced so other tooling can detect it
-        wrapper.__dict__["_agentscope_traced"] = True  # type: ignore[attr-defined]
-        wrapper.__dict__["_agentscope_span_kind"] = kind  # type: ignore[attr-defined]
+        wrapper.__dict__["_agentscope_traced"] = True
+        wrapper.__dict__["_agentscope_span_kind"] = kind
 
-        return wrapper  # type: ignore[return-value]
+        return cast(F, wrapper)
     return decorator
 
 
@@ -325,7 +307,7 @@ class AgentScopeCallbackHandler:
                 gen = response.generations[0][0]
                 if span.llm_call:
                     span.llm_call.completion = getattr(gen, "text", str(gen))
-                    span.llm_call.latency_ms = getattr(response, "llm_output", {}) or {}
+                    span.llm_call.latency_ms = getattr(response, "llm_output", {"total_ms": 0.0}).get("total_ms", 0.0) or 0.0
         except Exception:
             pass
         self._end_span(span)

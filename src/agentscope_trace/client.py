@@ -57,7 +57,7 @@ class AgentScopeConnectionError(AgentScopeClientError):
 
 # ── Span Serializer ───────────────────────────────────────────────────────────
 
-def _serialize(obj: Any) -> dict | None:
+def _serialize(obj: Any) -> Any:
     """Convert a dataclass or model to a plain dict suitable for JSON."""
     if obj is None:
         return None
@@ -68,7 +68,7 @@ def _serialize(obj: Any) -> dict | None:
     if isinstance(obj, (list, tuple)):
         return [_serialize(i) for i in obj]
     # Primitives pass through
-    return obj  # type: ignore[return-value]
+    return obj
 
 
 # ── HTTP Client ───────────────────────────────────────────────────────────────
@@ -250,11 +250,13 @@ class AgentScopeClient:
     def _do_flush(self) -> None:
         """Drain the queue and send spans to the backend."""
         # Collect spans up to batch_size
-        spans_data: list[dict] = []
+        spans_data: list[dict[str, Any]] = []
         while len(spans_data) < self.batch_size:
             try:
                 span = self.span_queue.get_nowait()
-                spans_data.append(_serialize(span.to_dict()))
+                serialized = _serialize(span.to_dict())
+                if serialized is not None:
+                    spans_data.append(serialized)
             except queue.Empty:
                 break
 
@@ -279,7 +281,7 @@ class AgentScopeClient:
                     break
 
         # Also flush sessions
-        sessions_data = []
+        sessions_data: list[dict[str, Any]] = []
         while not self.session_queue.empty():
             try:
                 session = self.session_queue.get_nowait()
