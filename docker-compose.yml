@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  agentscope:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      - AGENTSCOPE_URL=http://localhost:8000
+      - AGENTSCOPE_PROJECT=default
+    volumes:
+      - agentscope-data:/data
+
+volumes:
+  agentscope-data:

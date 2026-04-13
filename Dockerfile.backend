@@ -1,0 +1,18 @@
+# ── Backend Dockerfile ────────────────────────────────────────────────────────
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install backend deps only
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend code
+COPY src/agentscope/ src/agentscope/
+
+# Default port
+EXPOSE 8000
+
+# Run
+CMD ["uvicorn", "agentscope.backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
